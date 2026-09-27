@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: Forever Census
 ## Notes: Quiet, click-driven census of your realm through /who: charts, trends, guild breakdowns, CSV export and sync with friends.
-## Author: Ben + Codex
-## Version: 0.8.0
+## Author: Dubberness
+## Version: 0.8.1
 ## IconTexture: Interface\AddOns\ForeverCensus\Icon.tga
 ## AddonCompartmentFunc: ForeverCensus_OnAddonCompartmentClick
 ## AddonCompartmentFuncOnEnter: ForeverCensus_OnAddonCompartmentEnter

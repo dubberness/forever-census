@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1
+
+- The author is shown as Dubberness. No other changes.
+
 ## 0.8.0
 
 - A first swap is about four times as quick: between two 0.8.0 addons, characters go several to a message, with zones, guilds and realms sent once per swap. The pace on the wire is unchanged. Swapping with 0.7.x works as before.
