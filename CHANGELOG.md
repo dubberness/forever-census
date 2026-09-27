@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.2
+
+- Adds the Wago project ID, so the Wago app recognises copies installed by hand. No other changes.
+
 ## 0.8.1
 
 - The author is shown as Dubberness. No other changes.
