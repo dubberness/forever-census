@@ -1,0 +1,6 @@
+package-as: ForeverCensus
+
+ignore:
+  - README.md
+  - CHANGELOG.md
+  - media

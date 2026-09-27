@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Forever Census · Local viewer</title>
+<style>
+:root{color-scheme:dark;font:15px/1.6 system-ui,sans-serif;background:#101819;color:#e3eeea}*{box-sizing:border-box}body{max-width:1180px;margin:auto;padding:40px 24px;background:#101819}h1{font-size:36px;letter-spacing:-1px;margin:0;line-height:1.2}h2{font-size:17px;margin:0 0 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}p{color:#a7bcb6}.eyebrow{color:#6fe0bd;text-transform:uppercase;letter-spacing:2px;font-size:12px;margin:0 0 8px}.badge{float:right;border:1px solid #34514a;border-radius:20px;padding:5px 14px;color:#8fe6c5;font-size:12px}
+.card{background:#182324;border:1px solid #2a3d3b;border-radius:12px;padding:20px 22px;margin:20px 0;min-width:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:20px 0}.grid .card{margin:0}.actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+button,.file-button{background:#70dfb9;color:#10291f;border:0;border-radius:7px;padding:11px 16px;font:600 14px system-ui;cursor:pointer}button.secondary{background:#2a4140;color:#d7ebe5}button:disabled{opacity:.4;cursor:default}button:focus-visible{outline:2px solid #ffd100;outline-offset:2px}
+textarea,input,select{background:#101819;border:1px solid #3a504a;color:#e2eee9;border-radius:6px;padding:9px 10px;font:inherit}textarea{width:100%;height:100px;font:12px/1.4 monospace;margin:14px 0}input[type=file]{max-width:100%}input[type=number]{width:70px}
+.filters{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:end}.filters label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#acc7bd}.filters .levels{flex-direction:row;align-items:center;gap:6px}
+.metrics{display:flex;gap:36px;flex-wrap:wrap;margin:22px 0 8px}.metric strong{display:block;font-size:30px;font-weight:650;line-height:1.2}.metric span{font-size:13px;color:#a7bcb6}
+#message{min-height:26px;color:#8ee6c3;white-space:pre-wrap}
+.selection{display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:#2a2a14;border:1px solid #6b5d10;border-radius:10px;padding:10px 16px;margin:16px 0 0}.selection[hidden]{display:none}.selection span{color:#f3e7a6}
+.bars{display:flex;flex-direction:column;gap:6px}.bar{display:grid;grid-template-columns:130px 1fr 92px;gap:12px;align-items:center;background:none;color:inherit;font:13px system-ui;padding:5px 8px;border-radius:7px;text-align:left;border:1px solid transparent}.bar:hover{background:#1f2e2e}.bar[aria-pressed=true]{background:#2a2a14;border-color:#6b5d10}.bar.faded{opacity:.5}.bar .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bar .num{text-align:right;color:#cfe0da}.bar .num small{color:#8aa39b}.track{background:#263c36;height:10px;border-radius:10px;overflow:hidden}.fill{height:100%;border-radius:10px}.zero{opacity:.45}
+.columns{display:flex;align-items:flex-end;gap:2px;height:180px;border-bottom:1px solid #3a504a;padding-top:18px}.col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;min-width:0;position:relative}.col .stick{width:100%;max-width:34px;border-radius:3px 3px 0 0;background:#ffd100;min-height:1px}.col .count{font-size:10px;line-height:14px;color:#a7bcb6;position:absolute;white-space:nowrap}.ticks{display:flex;gap:2px;font-size:11px;color:#8aa39b;height:18px}.ticks span{flex:1;text-align:center;white-space:nowrap;overflow:visible;min-width:0}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}.list li{display:block}.item{display:grid;grid-template-columns:1fr auto;width:100%;gap:2px 12px;background:none;color:inherit;font:13px system-ui;padding:6px 8px;border-radius:7px;text-align:left;border:1px solid transparent}button.item:hover{background:#1f2e2e}.item[aria-pressed=true]{background:#2a2a14;border-color:#6b5d10}.item .name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.item .count{grid-row:span 2;align-self:center;font-weight:650;font-size:15px}.item .sub{font-size:12px;color:#8aa39b}
+.note{font-size:12px;color:#8aa39b;margin:10px 0 0}.muted{font-size:13px;color:#a7bcb6}
+.table-wrap{overflow:auto;max-height:440px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid #2a3d3b;white-space:nowrap}th{position:sticky;top:0;background:#182324;color:#93b4a9}
+summary{cursor:pointer;color:#c9e2d9}footer{color:#78978c;font-size:12px;margin:28px 0}
+@media(max-width:760px){.grid{grid-template-columns:1fr}.badge{float:none;display:inline-block;margin-bottom:12px}h1{font-size:28px}body{padding:24px 16px}.bar{grid-template-columns:96px 1fr 78px}.metrics{gap:22px}.metric strong{font-size:24px}}
+</style></head><body>
+<div class="badge">Local only · no uploads</div><p class="eyebrow">Forever Census / 0.7</p>
+<h1>A view of the characters you’ve seen.</h1>
+<p>Combine your own census exports with your friends’ files. Repeated sightings count once. Click a race, class or guild to break everything else down by it.</p>
+<section class="card"><h2>Add census data</h2>
+<div class="actions"><input id="files" type="file" multiple accept=".csv,text/csv" aria-label="Choose census CSV files"><button id="download" disabled>Save combined CSV</button></div>
+<details><summary>Paste an in-game export</summary><textarea id="paste" spellcheck="false" placeholder="In WoW: /fc export → Ctrl+A → Ctrl+C. Paste a whole page here, including the header." aria-label="Census CSV export"></textarea><button id="import">Import pasted page</button></details>
+<p class="muted">For larger exports, import every page using the addon’s Next button. Save the combined CSV before closing this page; data lives in this tab’s memory. Friends can send you their combined CSVs.</p>
+<div id="message" role="status" aria-live="polite">Waiting for your first export.</div></section>
+
+<section class="card filters" aria-label="Filters">
+<label>Search <input id="search" placeholder="Name, class, guild or zone"></label>
+<label>Realm <select id="realm"><option value="">All realms</option></select></label>
+<label>Faction <select id="faction"><option value="">All</option><option>Alliance</option><option>Horde</option></select></label>
+<label>Seen <select id="days"><option value="0">Any time</option><option value="1">Past 24 hours</option><option value="7">Past 7 days</option><option value="30">Past 30 days</option></select></label>
+<label>Levels <span class="levels"><input id="minLevel" type="number" min="1" max="60" placeholder="1" aria-label="Lowest level"> to <input id="maxLevel" type="number" min="1" max="60" placeholder="30" aria-label="Highest level"></span></label>
+<button id="clearFilters" class="secondary">Clear filters</button>
+</section>
+
+<div class="metrics"><div class="metric"><strong id="count">0</strong><span>Characters in view</span></div><div class="metric"><strong id="all">0</strong><span>Total unique characters</span></div><div class="metric"><strong id="average">—</strong><span>Average level</span></div><div class="metric"><strong id="capped">0</strong><span>At level 30</span></div><div class="metric"><strong id="guildCount">0</strong><span>Guilds</span></div><div class="metric"><strong id="latest">—</strong><span>Latest observation (local time)</span></div></div>
+<div id="selection" class="selection" hidden><span>Breaking down by <strong id="selectionText"></strong></span><button id="clearPick" class="secondary">Clear selection</button></div>
+
+<div class="grid">
+<section class="card"><h2 id="raceTitle">Races</h2><div id="races" class="bars"><p class="muted">Import data to see the breakdown.</p></div><p id="raceNote" class="note"></p></section>
+<section class="card"><h2 id="classTitle">Classes</h2><div id="classes" class="bars"><p class="muted">Import data to see the breakdown.</p></div><p id="classNote" class="note"></p></section>
+</div>
+<section class="card"><h2 id="levelTitle">Characters at each level</h2><div id="levels" class="columns" role="img" aria-label="Characters at each level"></div><div id="levelTicks" class="ticks"></div><p id="levelNote" class="note"></p></section>
+<div class="grid">
+<section class="card"><h2 id="guildTitle">Largest guilds</h2><ol id="guilds" class="list"></ol><p id="guildNote" class="note"></p></section>
+<section class="card"><h2 id="zoneTitle">Busiest zones</h2><ol id="zones" class="list"></ol><p id="zoneNote" class="note"></p></section>
+</div>
+<section class="card"><h2>New characters each day, last 30 days</h2><div id="days30" class="columns" role="img" aria-label="New characters each day"></div><div id="dayTicks" class="ticks"></div><p id="dayNote" class="note"></p></section>
+<section class="card"><h2 id="tableTitle">Observed characters</h2><div class="table-wrap"><table><thead><tr><th>Name–realm</th><th>Level</th><th>Class</th><th>Race</th><th>Guild</th><th>Zone</th><th>Last seen</th></tr></thead><tbody id="rows"></tbody></table></div><p id="limit" class="muted">No data yet.</p></section>
+<footer>These are observed characters, not distinct people or an exact concurrent population. /who coverage is limited by client search scope, result caps, missed queries and when collectors play. A character counts as new on the day a collector first saw it, so the first days of collecting include everyone who was already playing. Latest sightings supply character details; earliest sightings are preserved. Faction comes from race where it can, otherwise from the collector. This viewer makes no network requests.</footer>
+<script>
+/* Forever Census CSV interchange and analysis. No code evaluation or network requests. */
+const CensusData = (() => {
+  const columns = ['schema','region','client','fullName','observerRealm','observerFaction','level','race','class','guild','zone','firstSeen','lastSeen','build'];
+  // The WoW Forever beta stops at 30, as in the addon's Core.MAX_LEVEL.
+  const MAX_LEVEL = 30;
+  const factionByRace = {Human:'Alliance', Dwarf:'Alliance', Gnome:'Alliance', 'Night Elf':'Alliance',
+    Orc:'Horde', Troll:'Horde', Tauren:'Horde', Undead:'Horde', Scourge:'Horde', Forsaken:'Horde'};
+  const classOrder = ['Druid','Hunter','Mage','Paladin','Priest','Rogue','Shaman','Warlock','Warrior'];
+  const raceOrder = ['Human','Dwarf','Gnome','Night Elf','Orc','Undead','Tauren','Troll'];
+  function parseCSV(text) {
+    text = text.replace(/^﻿/, '');
+    const rows = []; let row = [], value = '', quoted = false, closed = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (quoted) {
+        if (c === '"' && text[i+1] === '"') { value += '"'; i++; }
+        else if (c === '"') { quoted = false; closed = true; }
+        else value += c;
+      } else if (c === ',' || c === '\n' || c === '\r') {
+        row.push(value); value = ''; closed = false;
+        if (c !== ',') {
+          if (row.some(x => x !== '')) rows.push(row);
+          row = [];
+          if (c === '\r' && text[i+1] === '\n') i++;
+        }
+      } else if (c === '"' && value === '' && !closed) quoted = true;
+      else {
+        if (closed || c === '"') throw Error('Malformed CSV quoting. Copy the whole export page.');
+        value += c;
+      }
+    }
+    if (quoted) throw Error('Incomplete CSV. Copy the whole export page.');
+    row.push(value);
+    if (row.some(x => x !== '')) rows.push(row);
+    if (!rows.length || rows[0].join(',') !== columns.join(',')) throw Error('Expected a Forever Census CSV export, including its header.');
+    return rows.slice(1).map((cells, index) => {
+      if (cells.length !== columns.length) throw Error(`Row ${index+2}: incorrect column count.`);
+      const r = Object.fromEntries(columns.map((k,i) => [k,cells[i]]));
+      for (const key of ['schema','level','firstSeen','lastSeen']) {
+        if (!/^\d+$/.test(r[key])) throw Error(`Row ${index+2}: invalid ${key}.`);
+        r[key] = Number(r[key]);
+        if (!Number.isSafeInteger(r[key])) throw Error(`Row ${index+2}: invalid ${key}.`);
+      }
+      if (r.schema !== 1 || r.client !== 'forever' || !['US','KR','EU','TW','CN','Unknown'].includes(r.region)
+          || !r.fullName.includes('-') || r.fullName.length > 200 || r.level < 1 || r.level > 60
+          || r.firstSeen > r.lastSeen || r.firstSeen < 1 || r.lastSeen > 4102444800) {
+        throw Error(`Row ${index+2}: invalid or unsupported character record.`);
+      }
+      if (cells.some(c => c.length > 1000)) throw Error(`Row ${index+2}: field too long.`);
+      // Undo our spreadsheet protection so repeated export/import is idempotent.
+      for (const key of columns) {
+        if (typeof r[key] === 'string' && /^'[=+@-]/.test(r[key])) r[key] = r[key].slice(1);
+      }
+      return r;
+    });
+  }
+  function identity(r) { return `${r.region}|${r.client}|${r.fullName.toLowerCase()}`; }
+  function merge(map, rows) {
+    let added = 0;
+    for (const r of rows) {
+      const key = identity(r), old = map.get(key);
+      if (!old) { map.set(key, {...r}); added++; continue; }
+      const newest = r.lastSeen > old.lastSeen || (r.lastSeen === old.lastSeen && JSON.stringify(r) > JSON.stringify(old)) ? r : old;
+      map.set(key, {...newest, firstSeen: Math.min(old.firstSeen, r.firstSeen), lastSeen: Math.max(old.lastSeen, r.lastSeen)});
+    }
+    return added;
+  }
+  function exportCSV(rows) {
+    function cell(value) {
+      let s = String(value);
+      if (/^[=+@-]/.test(s)) s = "'" + s;
+      return '"' + s.replaceAll('"','""') + '"';
+    }
+    return columns.join(',') + '\n' + [...rows].sort((a,b)=>identity(a).localeCompare(identity(b))).map(r=>columns.map(k=>cell(r[k])).join(',')).join('\n');
+  }
+
+  // The rest follows the addon's Overview, so the viewer and the game agree on every count.
+  const group = value => value ? value : 'Unknown';
+  const factionOf = r => factionByRace[r.race] || r.observerFaction || 'Unknown';
+  // Counts keyed by names from the server: no prototype, so no name can collide with one.
+  const counter = () => Object.create(null);
+  const bump = (counts, key) => { counts[key] = (counts[key] || 0) + 1; };
+
+  // The addon's filter bar: search, realm, faction, level range and how recently seen.
+  function filterRows(rows, f = {}, nowSeconds = Date.now() / 1000) {
+    const search = (f.search || '').toLowerCase();
+    const since = f.days ? nowSeconds - f.days * 86400 : 0;
+    return rows.filter(r => r.lastSeen >= since
+      && (!f.realm || r.observerRealm === f.realm)
+      && (!f.faction || factionOf(r) === f.faction)
+      && (!f.minLevel || r.level >= f.minLevel)
+      && (!f.maxLevel || r.level <= f.maxLevel)
+      && (!search || [r.fullName, r.class, r.race, r.guild, r.zone].join(' ').toLowerCase().includes(search)));
+  }
+
+  // One class, race or guild, or any mix of them, out of rows already filtered.
+  function subset(rows, pick = {}) {
+    if (!pick.class && !pick.race && !pick.guild) return rows;
+    return rows.filter(r => (!pick.class || group(r.class) === pick.class)
+      && (!pick.race || group(r.race) === pick.race)
+      && (!pick.guild || r.guild === pick.guild));
+  }
+
+  function summarize(rows) {
+    const s = {shown: rows.length, classes: counter(), races: counter(), factions: counter(), byLevel: counter(),
+      zones: counter(), guilds: new Map(), totalLevel: 0, atCap: 0, guildless: 0, topLevel: 0};
+    for (const r of rows) {
+      bump(s.classes, group(r.class));
+      bump(s.races, group(r.race));
+      bump(s.factions, factionOf(r));
+      bump(s.byLevel, r.level);
+      if (r.zone) bump(s.zones, r.zone);
+      s.totalLevel += r.level;
+      s.topLevel = Math.max(s.topLevel, r.level);
+      if (r.level === MAX_LEVEL) s.atCap++;
+      if (r.guild) {
+        let g = s.guilds.get(r.guild);
+        if (!g) { g = {name: r.guild, members: 0, totalLevel: 0, atCap: 0}; s.guilds.set(r.guild, g); }
+        g.members++; g.totalLevel += r.level;
+        if (r.level === MAX_LEVEL) g.atCap++;
+      } else s.guildless++;
+    }
+    return s;
+  }
+
+  // Largest first; ties by name, so the list never reshuffles itself.
+  function guildList(summary) {
+    return [...summary.guilds.values()].sort((a, b) => b.members - a.members || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  }
+
+  // Every known group of the factions present, even at zero, then any others the data
+  // holds, alphabetically: a gap stays visible instead of the chart closing up round it.
+  function chartKeys(order, counts, factions) {
+    const any = factions && Object.values(factions).some(n => n > 0);
+    const keys = order.filter(k => !any || !factionByRace[k] || (factions[factionByRace[k]] || 0) > 0);
+    const extra = Object.keys(counts).filter(k => !keys.includes(k)).sort();
+    return [...keys, ...extra];
+  }
+
+  function localDay(date) {
+    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+  }
+
+  // Characters by the local day they were first seen, for the last `days` days, oldest
+  // first, with a running total that counts everything earlier too.
+  function newPerDay(rows, days, nowMs = Date.now()) {
+    const entries = [], index = new Map();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(nowMs); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - i);
+      const entry = {key: localDay(d), date: d, count: 0, total: 0};
+      entries.push(entry); index.set(entry.key, entry);
+    }
+    let before = 0, earliest = null;
+    for (const r of rows) {
+      if (earliest === null || r.firstSeen < earliest) earliest = r.firstSeen;
+      const key = localDay(new Date(r.firstSeen * 1000));
+      const entry = index.get(key);
+      if (entry) entry.count++;
+      else if (key < entries[0].key) before++;
+    }
+    let running = before;
+    for (const entry of entries) { running += entry.count; entry.total = running; }
+    return {entries, earliest};
+  }
+
+  return {columns, MAX_LEVEL, classOrder, raceOrder, parseCSV, identity, merge, exportCSV,
+    group, factionOf, filterRows, subset, summarize, guildList, chartKeys, newPerDay};
+})();
+if (typeof module !== 'undefined') module.exports = CensusData;
+
+const D = CensusData;
+const records = new Map();
+const pick = {class: null, race: null, guild: null};
+const $ = id => document.getElementById(id);
+const message = text => { $('message').textContent = text; };
+const CLASS_COLOURS = {Warrior:'#c79c6e', Paladin:'#f58cba', Hunter:'#abd473', Rogue:'#fff569', Priest:'#e6e6e6', Shaman:'#0070de', Mage:'#40c7eb', Warlock:'#8787ed', Druid:'#ff7d0a'};
+const RACE_COLOURS = {Human:'#6b99e6', Dwarf:'#cc8c59', Gnome:'#bf73cc', 'Night Elf':'#8066d9', Orc:'#73b359', Undead:'#8cb399', Scourge:'#8cb399', Tauren:'#b8804d', Troll:'#59b8b8'};
+const OTHER = '#9e9ea8';
+const plural = name => name.endsWith('s') ? name : name + 's';
+const pct = (part, whole) => whole ? (part * 100 / whole).toFixed(1) + '%' : '0.0%';
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(props)) {
+    if (key === 'class') node.className = value; else if (key === 'text') node.textContent = value;
+    else if (key === 'style') Object.assign(node.style, value); else node.setAttribute(key, value);
+  }
+  node.append(...children);
+  return node;
+}
+function importText(text) {
+  if (text.length > 30_000_000) throw Error('Please split exports larger than 30 MB.');
+  const parsed = D.parseCSV(text); // Validate the whole page before changing state.
+  const added = D.merge(records, parsed);
+  render();
+  return `${parsed.length.toLocaleString()} rows read; ${added.toLocaleString()} new characters.`;
+}
+$('import').onclick = () => { try { message(importText($('paste').value)); $('paste').value = ''; } catch(e) { message(e.message); } };
+$('files').onchange = async event => {
+  const results = [];
+  for (const file of event.target.files) {
+    try {
+      if (file.size > 30_000_000) throw Error('File exceeds 30 MB.');
+      results.push(`${file.name}: ${importText(await file.text())}`);
+    } catch(e) { results.push(`${file.name}: ${e.message}`); }
+  }
+  message(results.join('\n')); event.target.value = '';
+};
+$('download').onclick = () => {
+  const blob = new Blob([D.exportCSV(records.values())], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob), link = document.createElement('a');
+  link.href = url; link.download = `ForeverCensus-${new Date().toISOString().slice(0,10)}.csv`;
+  link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+function toggle(kind, key) { pick[kind] = pick[kind] === key ? null : key; render(); }
+// Horizontal bars. Every group stays, even at zero; the one picked is marked and the rest step back.
+function bars(id, entries, total, colours, kind, scope, hint) {
+  const box = $(id); box.replaceChildren();
+  if (!total && !entries.some(e => e.count)) { box.append(el('p', {class:'muted', text:'No characters match the current view.'})); return; }
+  const peak = Math.max(1, ...entries.map(e => e.count));
+  for (const {key, count} of entries) {
+    const picked = pick[kind] === key;
+    const fill = el('div', {class:'fill', style:{width:`${count / peak * 100}%`, background: colours[key] || OTHER}});
+    const button = el('button', {class:'bar' + (pick[kind] && !picked ? ' faded' : '') + (count ? '' : ' zero'), 'aria-pressed': String(picked),
+      title: `${key}: ${count.toLocaleString()} (${pct(count, total)} of ${scope}). ${picked ? 'Click again to show everyone.' : hint(key)}`},
+      el('span', {class:'name', text:key}), el('span', {class:'track'}, fill),
+      el('span', {class:'num'}, count.toLocaleString() + ' ', el('small', {text: pct(count, total)})));
+    button.onclick = () => toggle(kind, key);
+    box.append(button);
+  }
+}
+// Vertical columns: one per level, or one per day.
+function columns(id, ticksId, entries, colourOf) {
+  const box = $(id), ticks = $(ticksId); box.replaceChildren(); ticks.replaceChildren();
+  const peak = Math.max(1, ...entries.map(e => e.count));
+  for (const entry of entries) {
+    const stick = el('div', {class:'stick', style:{height:`${entry.count / peak * 100}%`, background: colourOf(entry), opacity: entry.count ? '1' : '.25'}});
+    const col = el('div', {class:'col', title: entry.title}, stick);
+    if (entry.label && entry.count) col.prepend(el('span', {class:'count', style:{bottom:`${entry.count / peak * 100}%`}, text: entry.count.toLocaleString()}));
+    box.append(col);
+    ticks.append(el('span', {text: entry.tick || ''}));
+  }
+}
+function list(id, items, emptyText) {
+  const box = $(id); box.replaceChildren();
+  if (!items.length) { box.append(el('li', {class:'muted', text: emptyText})); return; }
+  for (const item of items) {
+    const inner = [el('span', {class:'name', text:item.name}), el('span', {class:'count', text:item.count.toLocaleString()}), el('span', {class:'sub', text:item.sub})];
+    let node;
+    if (item.onclick) {
+      node = el('button', {class:'item', 'aria-pressed': String(!!item.picked), title:item.title || ''}, ...inner);
+      node.onclick = item.onclick;
+    } else node = el('div', {class:'item', title:item.title || ''}, ...inner);
+    box.append(el('li', {}, node));
+  }
+}
+function filters() {
+  return {search: $('search').value, realm: $('realm').value, faction: $('faction').value, days: +$('days').value,
+    minLevel: +$('minLevel').value || 0, maxLevel: +$('maxLevel').value || 0};
+}
+function render() {
+  const all = [...records.values()];
+  const realm = $('realm').value;
+  const realms = [...new Set(all.map(r => r.observerRealm).filter(Boolean))].sort();
+  $('realm').replaceChildren(new Option('All realms', ''), ...realms.map(r => new Option(r, r)));
+  $('realm').value = realms.includes(realm) ? realm : '';
+  const rows = D.filterRows(all, filters());
+  const stats = D.summarize(rows);
+  const raceKeys = D.chartKeys(D.raceOrder, stats.races, stats.factions);
+  const classKeys = D.chartKeys(D.classOrder, stats.classes);
+  // A pick the filters have left with nobody is let go.
+  if (pick.class && !classKeys.includes(pick.class)) pick.class = null;
+  if (pick.race && !raceKeys.includes(pick.race)) pick.race = null;
+  if (pick.guild && !stats.guilds.has(pick.guild)) pick.guild = null;
+  const base = D.subset(rows, {guild: pick.guild});
+  const baseStats = pick.guild ? D.summarize(base) : stats;
+  const ofClass = pick.class ? D.summarize(D.subset(base, {class: pick.class})) : baseStats;
+  const ofRace = pick.race ? D.summarize(D.subset(base, {race: pick.race})) : baseStats;
+  const pickedRows = D.subset(base, {class: pick.class, race: pick.race});
+  const picked = pick.class || pick.race ? D.summarize(pickedRows) : baseStats;
+  const classPlural = pick.class && plural(pick.class);
+  const raceGroup = pick.race && `${pick.race} characters`;
+  const who = pick.class && pick.race ? `${pick.race} ${classPlural}` : classPlural || raceGroup;
+  const inGuild = pick.guild ? ` in ${pick.guild}` : '';
+
+  $('count').textContent = rows.length.toLocaleString(); $('all').textContent = records.size.toLocaleString();
+  $('average').textContent = rows.length ? (stats.totalLevel / rows.length).toFixed(1) : '—';
+  $('capped').textContent = stats.atCap.toLocaleString(); $('guildCount').textContent = stats.guilds.size.toLocaleString();
+  const latest = rows.reduce((m, r) => Math.max(m, r.lastSeen), 0);
+  $('latest').textContent = latest ? new Date(latest*1000).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+  $('download').disabled = !records.size;
+  const described = who ? who + inGuild : pick.guild;
+  $('selection').hidden = !described; $('selectionText').textContent = described || '';
+
+  const raceScope = classPlural ? classPlural + inGuild : pick.guild || 'the current view';
+  $('raceTitle').textContent = classPlural ? `Races of ${classPlural}${inGuild}` : pick.guild ? `Races in ${pick.guild}` : 'Races';
+  bars('races', raceKeys.map(key => ({key, count: ofClass.races[key] || 0})), ofClass.shown, RACE_COLOURS, 'race', raceScope,
+    key => `Click to see which classes ${key} characters play.`);
+  $('raceNote').textContent = `${ofClass.shown.toLocaleString()} characters across ${raceKeys.length} groups`;
+  const classScope = raceGroup ? raceGroup + inGuild : pick.guild || 'the current view';
+  $('classTitle').textContent = raceGroup ? `Classes of ${raceGroup}${inGuild}` : pick.guild ? `Classes in ${pick.guild}` : 'Classes';
+  bars('classes', classKeys.map(key => ({key, count: ofRace.classes[key] || 0})), ofRace.shown, CLASS_COLOURS, 'class', classScope,
+    key => `Click to see which races play ${plural(key)}.`);
+  $('classNote').textContent = `${ofRace.shown.toLocaleString()} characters across ${classKeys.length} groups`;
+
+  const top = Math.max(D.MAX_LEVEL, picked.topLevel);
+  const levelEntries = [];
+  for (let level = 1; level <= top; level++) {
+    const count = picked.byLevel[level] || 0;
+    levelEntries.push({count, level, tick: level === 1 || level % 5 === 0 ? String(level) : '',
+      title: `Level ${level}: ${count.toLocaleString()} (${pct(count, picked.shown)})`});
+  }
+  $('levelTitle').textContent = who ? `${who}${inGuild} at each level` : pick.guild ? `Members of ${pick.guild} at each level` : 'Characters at each level';
+  columns('levels', 'levelTicks', levelEntries, e => e.level === D.MAX_LEVEL ? '#a6e6ff' : '#ffd100');
+  $('levelNote').textContent = picked.shown ? `${picked.shown.toLocaleString()} characters  ·  average level ${(picked.totalLevel / picked.shown).toFixed(1)}  ·  ${picked.atCap.toLocaleString()} at level ${D.MAX_LEVEL}` : 'No matching characters';
+
+  // The guild list is not narrowed by the chosen guild, so another can be picked straight from it.
+  const guildScope = pick.guild ? (pick.class || pick.race ? D.summarize(D.subset(rows, {class: pick.class, race: pick.race})) : stats) : picked;
+  const guilds = D.guildList(guildScope);
+  $('guildTitle').textContent = who ? `Largest guilds: ${who}` : 'Largest guilds';
+  list('guilds', guilds.slice(0, 12).map(g => ({name: g.name, count: g.members, picked: pick.guild === g.name,
+    sub: `average level ${(g.totalLevel / g.members).toFixed(1)}  ·  ${g.atCap} at ${D.MAX_LEVEL}  ·  ${pct(g.members, guildScope.shown)}`,
+    title: pick.guild === g.name ? 'Click again to show every guild.' : 'Click to see this guild’s races, classes and levels.',
+    onclick: () => toggle('guild', g.name)})), guildScope.shown ? 'No guilds among the matching characters' : 'No matching characters');
+  $('guildNote').textContent = guilds.length ? `${guilds.length.toLocaleString()} guilds  ·  ${guildScope.guildless.toLocaleString()} unguilded${guilds.length > 12 ? '  ·  the 12 largest shown' : ''}` : '';
+  const zones = Object.entries(picked.zones).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+  $('zoneTitle').textContent = described ? `Busiest zones: ${described}` : 'Busiest zones';
+  list('zones', zones.slice(0, 12).map(([name, count]) => ({name, count, sub: `${pct(count, picked.shown)} last seen here`})), 'No zones recorded yet');
+  $('zoneNote').textContent = zones.length > 12 ? `${zones.length.toLocaleString()} zones  ·  the 12 busiest shown` : '';
+
+  const {entries, earliest} = D.newPerDay(rows, 30);
+  const dayFormat = {weekday:'short', day:'numeric', month:'short'};
+  columns('days30', 'dayTicks', entries.map((e, i) => ({count: e.count, label: true,
+    tick: (entries.length - 1 - i) % 7 === 0 ? e.date.toLocaleDateString([], {day:'numeric', month:'short'}) : '',
+    title: `${e.date.toLocaleDateString([], dayFormat)}: ${e.count.toLocaleString()} first seen, ${e.total.toLocaleString()} by the end of the day`})), () => '#64d9c5');
+  const week = entries.slice(-7).reduce((n, e) => n + e.count, 0), month = entries.reduce((n, e) => n + e.count, 0);
+  $('dayNote').textContent = `${week.toLocaleString()} first seen in the last 7 days  ·  ${month.toLocaleString()} in the last 30  ·  first sighting on record: ${earliest ? new Date(earliest*1000).toLocaleDateString() : 'none yet'}`;
+
+  const shownRows = [...pickedRows].sort((a,b)=>b.lastSeen-a.lastSeen || a.fullName.localeCompare(b.fullName));
+  $('tableTitle').textContent = described ? `Observed characters: ${described}` : 'Observed characters';
+  const fragment = document.createDocumentFragment();
+  for (const row of shownRows.slice(0,500)) {
+    const tr = document.createElement('tr');
+    for (const value of [row.fullName,row.level,row.class,row.race,row.guild||'—',row.zone||'—',new Date(row.lastSeen*1000).toLocaleString()]) {
+      const td = document.createElement('td'); td.textContent = String(value); tr.append(td);
+    }
+    fragment.append(tr);
+  }
+  $('rows').replaceChildren(fragment);
+  $('limit').textContent = shownRows.length > 500 ? `Showing the latest 500 of ${shownRows.length.toLocaleString()} matching characters. Save combined CSV includes all ${records.size.toLocaleString()} characters.` : `${shownRows.length.toLocaleString()} matching characters. Save combined CSV includes all stored characters.`;
+}
+for (const id of ['search','realm','faction','days','minLevel','maxLevel']) $(id).addEventListener('input', render);
+$('clearFilters').onclick = () => {
+  for (const id of ['search','realm','faction','minLevel','maxLevel']) $(id).value = '';
+  $('days').value = '0'; pick.class = pick.race = pick.guild = null; render();
+};
+$('clearPick').onclick = () => { pick.class = pick.race = pick.guild = null; render(); };
+window.addEventListener('beforeunload', event=> { if (records.size) { event.preventDefault(); event.returnValue = ''; } });
+render();
+</script></body></html>
