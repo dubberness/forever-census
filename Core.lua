@@ -110,6 +110,88 @@ function Core.Split(job, classes, races, total, capped)
     return children
 end
 
+-- The order searches are queued in, highest levels first. A pass takes days, and a
+-- character is only a sighting while it holds still: searching upwards chased players
+-- up the levels they were climbing and caught the ones parked at level 1, while
+-- searching down meets each of them once, coming the other way. `top` is the highest
+-- level anyone has been seen at. Bands wholly above it go last, lowest first, so a
+-- server reporting real totals can still retire them unsearched once everything below
+-- has accounted for the parent. Jobs at one level keep their order.
+local function highRank(job, top)
+    if job.lo <= top then return 0, -job.hi end
+    return 1, job.lo
+end
+
+function Core.HighFirst(jobs, top)
+    top = tonumber(top) or 0
+    local ranked = {}
+    for i, job in ipairs(jobs) do
+        local band, level = highRank(job, top)
+        ranked[i] = {job = job, band = band, level = level, index = i}
+    end
+    table.sort(ranked, function(a, b)
+        if a.band ~= b.band then return a.band < b.band end
+        if a.level ~= b.level then return a.level < b.level end
+        return a.index < b.index
+    end)
+    for i, entry in ipairs(ranked) do jobs[i] = entry.job end
+    return jobs
+end
+
+-- How far a job has been taken apart: a level band, then race or class, then both,
+-- then a name. The queue is kept breadth-first by this depth, and highest level first
+-- within each. Queuing children behind whatever was already waiting was breadth-first
+-- by number of halvings instead, and a level that took one fewer to reach (15, on a
+-- 1-30 range) was taken apart a whole depth before its neighbours; its alphabet sweep
+-- finished days early and it stood out on the level chart.
+function Core.Depth(job)
+    if job.name then return 3 end
+    if job.race and job.class then return 2 end
+    if job.race or job.class then return 1 end
+    return 0
+end
+
+function Core.Reorder(jobs, top)
+    local depths = {}
+    for _, job in ipairs(jobs) do
+        local depth = Core.Depth(job)
+        depths[depth] = depths[depth] or {}
+        depths[depth][#depths[depth] + 1] = job
+    end
+    local ordered = {}
+    for depth = 0, 3 do
+        for _, job in ipairs(Core.HighFirst(depths[depth] or {}, top)) do ordered[#ordered + 1] = job end
+    end
+    return ordered
+end
+
+-- Queue new jobs into an ordered queue, each behind any already waiting in the same
+-- place. Re-sorting a queue of five thousand after every reply took about 9 ms, a hitch
+-- every few seconds; finding each child's place takes a dozen comparisons.
+local function jobKey(job, top)
+    local band, level = highRank(job, top)
+    return Core.Depth(job), band, level
+end
+
+function Core.Enqueue(queue, jobs, top)
+    top = tonumber(top) or 0
+    for _, job in ipairs(jobs) do
+        local depth, band, level = jobKey(job, top)
+        local first, last = 1, #queue + 1
+        while first < last do
+            local middle = math.floor((first + last) / 2)
+            local d, b, l = jobKey(queue[middle], top)
+            if depth < d or (depth == d and (band < b or (band == b and level < l))) then
+                last = middle
+            else
+                first = middle + 1
+            end
+        end
+        table.insert(queue, first, job)
+    end
+    return queue
+end
+
 -- A pass on a busy realm outlasts a session, so the searches still to do are written
 -- out at logout. Only what a search needs is kept; anything read back is checked as
 -- carefully as data from outside, since a hand-edited file could hold anything.

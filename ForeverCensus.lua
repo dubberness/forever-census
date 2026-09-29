@@ -15,6 +15,8 @@ local windowHooked = false
 local classes, races = {}, {}
 local ownRaces, otherRaces, knownRaces, knownClasses, learnedRaces = {}, {}, {}, {}, {}
 local crossFaction = false
+-- The highest level anyone on this faction has been seen at; searches start there.
+local topLevel = 0
 -- About this session only, so none of it is saved: how much was on disk at login, how
 -- much the last save lost, and which characters have been added or changed since.
 local loadedCount, lostCount = 0, nil
@@ -156,10 +158,13 @@ local function prepareSplits()
     rebuildRaces()
     -- Whatever earlier sessions saw through this faction's /who, in a stable order.
     local seenRaces, seenClasses = {}, {}
+    topLevel = 0
     for _, record in pairs(db.records) do
         if record.observerFaction == context.faction and record.client == context.client then
             seenRaces[record.race or ""] = true
             seenClasses[record.class or ""] = true
+            local level = tonumber(record.level)
+            if level and level > topLevel then topLevel = math.min(level, Core.MAX_LEVEL) end
         end
     end
     local function sorted(set)
@@ -175,6 +180,7 @@ end
 local function finishScan()
     if not scan then return end
     scan.finished = GetServerTime()
+    if scan.abandoned then scan.left = #queue + (pending and 1 or 0) end
     scan.unique = 0
     for _ in pairs(scan.seen) do scan.unique = scan.unique + 1 end
     -- The list of who was seen is too big to keep, but what they add up to is not:
@@ -212,8 +218,9 @@ local function storePass()
     store[key] = nil
     if scan then
         local jobs = {}
-        -- A search sent but not yet answered is simply asked again next time.
-        if pending then jobs[#jobs + 1] = Core.PackJob(pending.job) end
+        -- A search sent but not yet answered is simply asked again next time, unless it
+        -- belonged to a pass that has since been abandoned.
+        if pending and not pending.job.stale then jobs[#jobs + 1] = Core.PackJob(pending.job) end
         for _, job in ipairs(queue) do
             if not (job.group and job.group.remaining <= 0) then jobs[#jobs + 1] = Core.PackJob(job) end
         end
@@ -241,7 +248,10 @@ local function restorePass()
     for _, field in ipairs({"queries", "capped", "failed"}) do scan[field] = tonumber(scan[field]) or 0 end
     scan.seen = type(scan.seen) == "table" and scan.seen or {}
     scan.sessions = (tonumber(scan.sessions) or 1) + 1
-    queue = jobs
+    -- A pass begun before 0.8.3 was working upwards from level 1, and the highest level
+    -- seen may have moved since logout; either way the rest carries on from the top. The
+    -- search left unanswered was first in line when it was sent and stays first.
+    queue = Core.Reorder(jobs, topLevel)
     if #queue == 0 then
         finishScan()
         return
@@ -254,7 +264,9 @@ local function retryPending(reason, deferred)
     local job = pending.job
     pending = nil
     job.retries = (job.retries or 0) + 1
-    if job.retries <= 2 then
+    if job.stale then
+        -- It belonged to an abandoned pass: there is nothing to ask again.
+    elseif job.retries <= 2 then
         table.insert(queue, 1, job)
     elseif scan then
         scan.failed = scan.failed + 1
@@ -262,6 +274,31 @@ local function retryPending(reason, deferred)
     nextSend = GetTime() + 60
     lastMessage = reason
     restoreWhoWindow(deferred)
+end
+
+-- Throw away what is left of the pass under way and start again from the top. Nothing
+-- it found is lost: its characters stay stored, and the pass is kept, marked
+-- abandoned, so Trends can still compare with it. A pass that never got an answer
+-- leaves nothing worth keeping.
+local function newPass()
+    if not supported or not context then return false end
+    local old = scan
+    if pending then pending.job.stale = true end
+    if old then
+        if old.queries > 0 then
+            old.abandoned = true
+            finishScan()
+        else
+            scan = nil
+        end
+    end
+    startScan()
+    lastMessage = old and old.abandoned
+        and string.format("Started a new pass; the last one was abandoned after %d searches with %d still to do",
+            old.queries, old.left or 0)
+        or "Started a new pass"
+    if dataPanel then dataPanel.dirty = true end
+    return true
 end
 
 local function failClosed(message, deferred)
@@ -369,18 +406,28 @@ local function onWho()
     end
     db.filters = db.filters or {}
     Core.Observe(db.filters, job, fit)
-    scan.strays = (scan.strays or 0) + (n - fit.level)
     pending = nil
     local stamp = GetServerTime()
+    local topBefore = topLevel
     for _, row in ipairs(rows) do
         learn(row.raceStr, row.classStr)
         local _, key = Core.Record(db.records, row, context, stamp)
         if key then
-            scan.seen[key] = true
+            if not job.stale then scan.seen[key] = true end
             touch(key)
+            local level = tonumber(row.level)
+            if level and level > topLevel then topLevel = math.min(level, Core.MAX_LEVEL) end
         end
     end
     if dataPanel then dataPanel.dirty = true end
+    -- The answer to a search from a pass abandoned while it was on its way: the
+    -- characters in it are real and are kept, but it is no part of the new pass.
+    if job.stale then
+        lastMessage = string.format("Received %d characters for the abandoned pass; kept, and the new pass carries on", n)
+        restoreWhoWindow(true)
+        return
+    end
+    scan.strays = (scan.strays or 0) + (n - fit.level)
     scan.queries = scan.queries + 1
     scan.consecutiveTimeouts = 0
     -- A reported total is only worth anything when it exceeds the page: `total == n`
@@ -400,12 +447,14 @@ local function onWho()
         else
             -- Breadth first: every level gets its first look before any one level is
             -- taken apart race by race and name by name, so a pass cut short still
-            -- covers the whole range instead of only its bottom few levels.
+            -- covers the whole range. Within each depth the highest levels go first,
+            -- however many halvings each level took to reach (see Core.HighFirst).
             local group = trusted and {remaining = trusted} or nil
-            for _, child in ipairs(children) do
-                child.group = group
-                queue[#queue + 1] = child
-            end
+            for _, child in ipairs(children) do child.group = group end
+            -- Someone higher than ever seen moves the starting line, so what is waiting
+            -- is put back in order once; otherwise each child just takes its place.
+            if topLevel ~= topBefore then queue = Core.Reorder(queue, topLevel) end
+            Core.Enqueue(queue, children, topLevel)
         end
     end
     lastMessage = string.format("Received %d characters%s; %d queued searches", n,
@@ -460,7 +509,10 @@ local function statusText()
         "Gathered since login: " .. new .. " new and " .. updated .. " seen again or updated, held in memory until /reload, logout or a clean exit",
         "WoW writes addon data at those three moments only and no addon can force it; a crash or a killed client loses the session.",
     }
-    if last then parts[#parts + 1] = "Last pass: " .. last.unique .. " characters, " .. last.capped .. " capped groups, " .. last.failed .. " failed queries." end
+    if last then
+        parts[#parts + 1] = "Last pass: " .. last.unique .. " characters, " .. last.capped .. " capped groups, " .. last.failed .. " failed queries"
+            .. (last.abandoned and (", abandoned with " .. (last.left or 0) .. " searches left.") or ".")
+    end
     if lostCount then
         parts[#parts + 1] = "|cffff7f7fThe last save kept only " .. loadedCount .. " of " .. db.expectedCount
             .. " characters. Export regularly; saving on this client is unreliable. Your next sync asks each partner for everything, to fill the gap.|r"
@@ -849,6 +901,14 @@ local function buildStatus(w)
         18, -604, 960, "GameFontDisableSmall"):SetSpacing(3)
     function w:RefreshStatus()
         self.statusText:SetText(statusText())
+        -- An unconfirmed click on Start a new pass lapses after five seconds.
+        if self.newPassButton then
+            if not (self.confirmNewPass and GetTime() < self.confirmNewPass) then
+                self.confirmNewPass = nil
+                self.newPassButton:SetText("Start a new pass")
+            end
+            self.newPassButton:SetEnabled(supported)
+        end
         local seconds = Core.Interval(db.settings)
         if self.intervalSlider:GetValue() ~= seconds then self.intervalSlider:SetValue(seconds) end
     end
@@ -992,13 +1052,15 @@ local function mixTable(entries, room, maxColumns)
             local older = entries[j].pass
             if older.realm == pass.realm and older.faction == pass.faction then before = entries[j].mix; break end
         end
-        local when = entry.live and "In progress" or date("%m-%d %H:%M", pass.finished or pass.started)
+        local when = entry.live and "In progress"
+            or ((pass.abandoned and "Abandoned " or "") .. date("%m-%d %H:%M", pass.finished or pass.started))
         local cells = {when, uiText(pass.realm or "?"), tostring(mix.n),
             string.format("%.1f", mix.levels / math.max(1, mix.n)), tostring(mix.atCap)}
         for _, class in ipairs(classKeys) do
             cells[#cells + 1] = string.format("%.1f%%", share(mix.classes[class] or 0, mix.n))
         end
-        local lines = {entry.live and "Pass in progress, so far" or ("Pass finished " .. date("%Y-%m-%d %H:%M", pass.finished or pass.started)),
+        local lines = {entry.live and "Pass in progress, so far"
+            or ((pass.abandoned and "Pass abandoned, unfinished, " or "Pass finished ") .. date("%Y-%m-%d %H:%M", pass.finished or pass.started)),
             "Started " .. date("%Y-%m-%d %H:%M", pass.started) .. " on " .. uiText(pass.realm or "?"),
             string.format("%d characters, average level %.1f, %d at level %d", mix.n, mix.levels / math.max(1, mix.n), mix.atCap, Core.MAX_LEVEL)}
         local function describe(counts, earlier)
@@ -1065,6 +1127,25 @@ function NS.ShowData(tab)
         w.passes = CreateFrame("Frame", nil, w)
         w.passes:SetAllPoints(w)
         w.passTable = Charts.List(w.passes, 16, -146, 978, 494, "Census passes (newest first)", 16)
+        -- Starting over throws away days of queued searches, so it takes a second click.
+        w.newPassButton = button(w.passes, "Start a new pass", 812, -112, 182, function()
+            if w.confirmNewPass and GetTime() < w.confirmNewPass then
+                w.confirmNewPass = nil
+                if newPass() then say(lastMessage) end
+                w:Refresh()
+            else
+                w.confirmNewPass = GetTime() + 5
+                w.newPassButton:SetText("Click again to confirm")
+            end
+        end)
+        w.newPassButton:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+            GameTooltip:AddLine("Start a new pass", 1, 0.82, 0)
+            GameTooltip:AddLine("Drops the searches still queued in the pass under way and starts again from the highest level.", 1, 1, 1, true)
+            GameTooltip:AddLine("Every character already found stays stored, and the old pass is kept on this tab and on Trends, marked abandoned.", 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        w.newPassButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
         buildSync(w)
         buildExport(w)
@@ -1208,10 +1289,11 @@ function NS.ShowData(tab)
             end
             for i = #db.scans, 1, -1 do
                 local pass = db.scans[i]
+                local abandoned = pass.abandoned and string.format("  |  abandoned with %d searches left", pass.left or 0) or ""
                 passItems[#passItems + 1] = {
                     left = date("%Y-%m-%d %H:%M", pass.started), right = pass.unique or 0,
-                    sub = string.format("%s  |  %d responses, %d capped, %d failed", pass.realm or "?", pass.queries or 0, pass.capped or 0, pass.failed or 0),
-                    lines = {date("%Y-%m-%d %H:%M", pass.started),
+                    sub = string.format("%s  |  %d responses, %d capped, %d failed%s", pass.realm or "?", pass.queries or 0, pass.capped or 0, pass.failed or 0, abandoned),
+                    lines = {date("%Y-%m-%d %H:%M", pass.started) .. (pass.abandoned and ", abandoned unfinished" or ""),
                         (pass.unique or 0) .. " characters observed", (pass.queries or 0) .. " who responses",
                         (pass.capped or 0) .. " capped groups (incomplete)", (pass.failed or 0) .. " failed queries",
                         (pass.strays or 0) .. " rows outside the requested filter, kept anyway",
@@ -1450,6 +1532,9 @@ local function initialize()
         elseif command == "stats" or command == "charts" then NS.ShowData("Overview")
         elseif command == "guilds" then NS.ShowData("Guilds")
         elseif command == "passes" then NS.ShowData("Passes")
+        elseif command == "newpass" then
+            if newPass() then say(lastMessage) else say("Collection is not available on this client") end
+            NS.ShowData("Passes")
         elseif command == "sync" then
             -- "/fc sync Name all" swaps everything, not just what changed since last time.
             local everyone = arg:match("^(.-)%s+[Aa][Ll][Ll]$")

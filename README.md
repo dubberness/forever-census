@@ -12,7 +12,7 @@ Download `ForeverCensus-x.y.z.zip` from [Releases](../../releases) and extract i
 
 ## How it collects
 
-Each search is an ordinary /who, sent only when you click in the world (or press **Next query**). It never runs on a timer, and sends at most one search every 10 seconds by default (`/fc interval N`, 5 to 60). It works through levels 1–30 and splits crowded levels by race, class and name until each search fits under the server's 50-result cap. It pauses in combat and while your Who or Friends window is open, your own searches always come first, and the Who window never pops up. A pass that doesn't finish in one session carries on at your next login.
+Each search is an ordinary /who, sent only when you click in the world (or press **Next query**). It never runs on a timer, and sends at most one search every 10 seconds by default (`/fc interval N`, 5 to 60). It works down from the highest level anyone has been seen at, splitting crowded levels by race, class and name until each search fits under the server's 50-result cap. It pauses in combat and while your Who or Friends window is open, your own searches always come first, and the Who window never pops up. A pass that doesn't finish in one session carries on at your next login. `/fc newpass`, or **Start a new pass** on the Passes tab, abandons it and starts again; nothing it found is lost.
 
 ## What you get
 
@@ -49,6 +49,7 @@ Open `ForeverCensus-Viewer.html` (in the addon folder) in a browser. In game, `/
 | `/fc guilds` | Guilds by observed members |
 | `/fc trends` | New characters per day, and passes compared |
 | `/fc passes` | Completed census passes |
+| `/fc newpass` | Abandon the pass under way and start a new one |
 | `/fc sync Name` | Offer to swap data with that character (`/fc sync Name all` swaps everything again) |
 | `/fc accept` / `/fc ignore` | Answer a sharing request |
 | `/fc autosync` | Turn automatic swaps on or off |

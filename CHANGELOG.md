@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.3
+
+- Searches now work down from the highest level anyone has been seen at, instead of up from level 1. A pass takes days on a busy realm, and working upwards meant low levels were swept first while the higher ones waited, so the charts leaned towards low levels until it finished. The searches are the same ones, just in a different order. A pass already under way switches to the new order at login.
+- Fixes a spike at level 15 on the level chart: that level was being taken apart ahead of its neighbours.
+- New **Start a new pass** button on the Passes tab (click twice), and `/fc newpass`: abandons the pass under way and starts again. Every character found stays stored, and the old pass stays listed, marked abandoned.
+
 ## 0.8.2
 
 - Adds the Wago project ID, so the Wago app recognises copies installed by hand. No other changes.
